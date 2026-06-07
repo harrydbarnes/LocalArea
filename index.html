@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>LocalArea — Independent Shops &amp; Restaurants</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --clr-bg:       #f7f5f2;
+      --clr-surface:  #ffffff;
+      --clr-primary:  #2d6a4f;
+      --clr-primary-light: #52b788;
+      --clr-accent:   #f4a261;
+      --clr-text:     #1b1b1b;
+      --clr-muted:    #6b7280;
+      --clr-border:   #e5e0d8;
+      --clr-shadow:   rgba(0,0,0,0.10);
+      --radius-sm:    8px;
+      --radius-md:    14px;
+      --radius-lg:    20px;
+      --header-h:     64px;
+      --filter-h:     56px;
+      --panel-w:      380px;
+      --safe-bottom:  env(safe-area-inset-bottom, 0px);
+      --safe-top:     env(safe-area-inset-top, 0px);
+      font-size: 16px;
+    }
+    html, body { height: 100%; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; background: var(--clr-bg); color: var(--clr-text); }
+
+    /* ─── Layout Shell ─────────────────────────────────── */
+    .app { display: flex; flex-direction: column; height: 100dvh; height: 100vh; }
+
+    /* ─── Header ───────────────────────────────────────── */
+    .header {
+      position: relative; z-index: 30;
+      height: var(--header-h);
+      background: var(--clr-surface);
+      border-bottom: 1px solid var(--clr-border);
+      display: flex; align-items: center; gap: 12px; padding: 0 16px;
+      padding-top: var(--safe-top);
+      box-shadow: 0 1px 8px var(--clr-shadow);
+    }
+    .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; flex-shrink: 0; }
+    .logo-icon { width: 34px; height: 34px; background: var(--clr-primary); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .logo-icon svg { width: 18px; height: 18px; fill: #fff; }
+    .logo-text { font-size: 1.05rem; font-weight: 700; color: var(--clr-primary); letter-spacing: -0.3px; }
+    .logo-text span { color: var(--clr-accent); }
+
+    .search-wrap { flex: 1; position: relative; max-width: 480px; }
+    .search-input {
+      width: 100%; height: 40px; border: 1.5px solid var(--clr-border); border-radius: 22px;
+      padding: 0 16px 0 40px; font-size: 0.9rem; font-family: inherit; background: var(--clr-bg);
+      transition: border-color .2s, box-shadow .2s; outline: none; color: var(--clr-text);
+    }
+    .search-input:focus { border-color: var(--clr-primary-light); box-shadow: 0 0 0 3px rgba(82,183,136,.18); }
+    .search-input::placeholder { color: var(--clr-muted); }
+    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--clr-muted); pointer-events: none; }
+    .search-icon svg { width: 16px; height: 16px; stroke: currentColor; fill: none; }
+    .search-clear {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer; padding: 4px; color: var(--clr-muted);
+      display: none;
+    }
+    .search-clear svg { width: 14px; height: 14px; stroke: currentColor; fill: none; }
+    .search-wrap.has-value .search-clear { display: flex; }
+
+    .header-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .icon-btn {
+      width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--clr-border);
+      background: var(--clr-bg); cursor: pointer; display: flex; align-items: center; justify-content: center;
+      color: var(--clr-muted); transition: all .15s; flex-shrink: 0;
+    }
+    .icon-btn:hover { background: var(--clr-primary); color: #fff; border-color: var(--clr-primary); }
+    .icon-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+    /* ─── Filter Bar ───────────────────────────────────── */
+    .filter-bar {
+      position: relative; z-index: 25;
+      height: var(--filter-h); background: var(--clr-surface);
+      border-bottom: 1px solid var(--clr-border);
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 16px; overflow-x: auto; scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .filter-chip {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+      height: 34px; padding: 0 14px; border-radius: 20px;
+      font-size: 0.82rem; font-weight: 500; font-family: inherit;
+      border: 1.5px solid var(--clr-border); background: var(--clr-bg);
+      color: var(--clr-text); cursor: pointer; transition: all .15s;
+      scroll-snap-align: start; white-space: nowrap;
+    }
+    .filter-chip:hover { border-color: var(--clr-primary-light); color: var(--clr-primary); }
+    .filter-chip.active { background: var(--clr-primary); border-color: var(--clr-primary); color: #fff; }
+    .filter-chip .chip-emoji { font-size: 0.95rem; line-height: 1; }
+    .filter-divider { width: 1px; height: 22px; background: var(--clr-border); flex-shrink: 0; }
+
+    /* ─── Main Body ────────────────────────────────────── */
+    .body { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+    /* ─── Map ──────────────────────────────────────────── */
+    #map { flex: 1; z-index: 1; }
+    .leaflet-container { font-family: 'Inter', sans-serif; }
+
+    /* custom marker */
+    .map-marker {
+      width: 36px; height: 36px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+      border: 2.5px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform .15s;
+    }
+    .map-marker.coffee  { background: #6b4f3a; }
+    .map-marker.restaurant { background: #c1440e; }
+    .map-marker.italian { background: #009246; }
+    .map-marker.japanese { background: #bc002d; }
+    .map-marker.indian  { background: #f5a623; }
+    .map-marker.chinese { background: #de2910; }
+    .map-marker.clothes { background: #7c3aed; }
+    .map-marker.bakery  { background: #c9792c; }
+    .map-marker.bar     { background: #1e40af; }
+    .map-marker.deli    { background: #166534; }
+    .map-marker.brunch  { background: #d97706; }
+    .map-marker.thai    { background: #0f766e; }
+    .map-marker.default { background: var(--clr-primary); }
+    .map-marker .marker-inner { transform: rotate(45deg); font-size: 14px; line-height: 1; }
+
+    .map-marker:hover { transform: rotate(-45deg) scale(1.15); }
+    .map-marker.highlighted { transform: rotate(-45deg) scale(1.2); z-index: 999 !important; }
+
+    /* ─── Sidebar (desktop) ────────────────────────────── */
+    .sidebar {
+      width: var(--panel-w); background: var(--clr-bg); border-left: 1px solid var(--clr-border);
+      display: flex; flex-direction: column; overflow: hidden; z-index: 10;
+      transition: transform .3s ease;
+    }
+    .sidebar-header {
+      padding: 16px 18px 12px; background: var(--clr-surface);
+      border-bottom: 1px solid var(--clr-border); flex-shrink: 0;
+    }
+    .sidebar-title { font-size: 0.78rem; font-weight: 600; color: var(--clr-muted); text-transform: uppercase; letter-spacing: .7px; }
+    .sidebar-count { font-size: 1.35rem; font-weight: 700; color: var(--clr-text); margin-top: 2px; }
+    .sidebar-list { flex: 1; overflow-y: auto; padding: 12px; gap: 10px; display: flex; flex-direction: column; }
+    .sidebar-list::-webkit-scrollbar { width: 4px; }
+    .sidebar-list::-webkit-scrollbar-thumb { background: var(--clr-border); border-radius: 2px; }
+
+    /* ─── Place Card ───────────────────────────────────── */
+    .place-card {
+      background: var(--clr-surface); border-radius: var(--radius-md);
+      border: 1.5px solid var(--clr-border); padding: 14px;
+      cursor: pointer; transition: all .15s; position: relative; overflow: hidden;
+    }
+    .place-card:hover, .place-card.active {
+      border-color: var(--clr-primary-light); box-shadow: 0 4px 16px rgba(45,106,79,.12);
+      transform: translateY(-1px);
+    }
+    .place-card.active { border-color: var(--clr-primary); }
+    .card-top { display: flex; align-items: flex-start; gap: 12px; }
+    .card-icon {
+      width: 46px; height: 46px; border-radius: var(--radius-sm); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 1.3rem;
+    }
+    .card-icon.coffee  { background: #f5ece4; }
+    .card-icon.restaurant { background: #fef2ee; }
+    .card-icon.italian { background: #edfaf0; }
+    .card-icon.japanese { background: #fff0f3; }
+    .card-icon.indian  { background: #fffbeb; }
+    .card-icon.chinese { background: #fff1f2; }
+    .card-icon.clothes { background: #f5f3ff; }
+    .card-icon.bakery  { background: #fef9ec; }
+    .card-icon.bar     { background: #eff6ff; }
+    .card-icon.deli    { background: #f0fdf4; }
+    .card-icon.brunch  { background: #fffbeb; }
+    .card-icon.thai    { background: #f0fdfa; }
+    .card-icon.default { background: #f0fdf4; }
+    .card-info { flex: 1; min-width: 0; }
+    .card-name { font-size: 0.97rem; font-weight: 600; color: var(--clr-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+    .card-type { font-size: 0.78rem; color: var(--clr-muted); }
+    .card-badge {
+      font-size: 0.68rem; font-weight: 600; padding: 2px 7px; border-radius: 12px;
+      letter-spacing: .3px;
+    }
+    .badge-indie { background: #dcfce7; color: #166534; }
+    .badge-small-chain { background: #fef9c3; color: #854d0e; }
+    .card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .card-tag {
+      font-size: 0.72rem; padding: 3px 9px; border-radius: 12px;
+      background: var(--clr-bg); border: 1px solid var(--clr-border); color: var(--clr-muted);
+    }
+    .card-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+    .card-rating { display: flex; align-items: center; gap: 4px; font-size: 0.82rem; font-weight: 600; }
+    .card-rating .stars { color: #f59e0b; font-size: 0.85rem; }
+    .card-addr { font-size: 0.76rem; color: var(--clr-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+
+    /* ─── Detail Panel ─────────────────────────────────── */
+    .detail-panel {
+      position: absolute; inset: 0; z-index: 50; background: var(--clr-surface);
+      transform: translateX(100%); transition: transform .3s ease; overflow-y: auto;
+      display: flex; flex-direction: column;
+    }
+    .detail-panel.open { transform: translateX(0); }
+    .detail-header {
+      position: sticky; top: 0; z-index: 2; padding: 14px 16px;
+      background: var(--clr-surface); border-bottom: 1px solid var(--clr-border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .back-btn {
+      width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--clr-border);
+      background: var(--clr-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      color: var(--clr-text);
+    }
+    .back-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+    .detail-title { font-size: 1.05rem; font-weight: 700; }
+    .detail-body { padding: 20px 18px; flex: 1; }
+    .detail-hero {
+      width: 100%; height: 160px; border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--clr-primary), var(--clr-primary-light));
+      display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 18px;
+    }
+    .detail-name { font-size: 1.4rem; font-weight: 700; }
+    .detail-sub { font-size: 0.88rem; color: var(--clr-muted); margin-top: 4px; }
+    .detail-badges { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .detail-section { margin-top: 22px; }
+    .detail-section-title { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .7px; color: var(--clr-muted); margin-bottom: 10px; }
+    .detail-info-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+    .detail-info-icon { width: 32px; height: 32px; border-radius: 8px; background: var(--clr-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .detail-info-icon svg { width: 15px; height: 15px; stroke: var(--clr-primary); fill: none; stroke-width: 2; }
+    .detail-info-text { font-size: 0.87rem; color: var(--clr-text); padding-top: 6px; }
+    .detail-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .detail-tag { font-size: 0.8rem; padding: 5px 12px; border-radius: 14px; background: var(--clr-bg); border: 1.5px solid var(--clr-border); color: var(--clr-text); }
+    .detail-note { margin-top: 14px; padding: 12px 14px; background: #f0fdf4; border-radius: var(--radius-sm); border-left: 3px solid var(--clr-primary-light); font-size: 0.83rem; color: #166534; line-height: 1.5; }
+    .directions-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; height: 46px; border-radius: var(--radius-md); margin-top: 24px;
+      background: var(--clr-primary); color: #fff; font-size: 0.9rem; font-weight: 600;
+      font-family: inherit; border: none; cursor: pointer; transition: background .15s;
+      text-decoration: none;
+    }
+    .directions-btn:hover { background: #1f5436; }
+    .directions-btn svg { width: 17px; height: 17px; stroke: #fff; fill: none; stroke-width: 2; }
+
+    /* ─── No-results ───────────────────────────────────── */
+    .no-results { text-align: center; padding: 40px 20px; color: var(--clr-muted); }
+    .no-results .emoji { font-size: 2.5rem; display: block; margin-bottom: 10px; }
+    .no-results p { font-size: 0.88rem; line-height: 1.6; }
+
+    /* ─── Mobile bottom-sheet ──────────────────────────── */
+    .bottom-sheet {
+      display: none; position: absolute; left: 0; right: 0; bottom: 0; z-index: 20;
+      background: var(--clr-surface); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      box-shadow: 0 -4px 24px rgba(0,0,0,.12);
+      transform: translateY(calc(100% - 120px));
+      transition: transform .3s cubic-bezier(.4,0,.2,1);
+      max-height: calc(100dvh - var(--header-h) - var(--filter-h) - 20px);
+      max-height: calc(100vh - var(--header-h) - var(--filter-h) - 20px);
+      padding-bottom: var(--safe-bottom);
+    }
+    .bottom-sheet.expanded { transform: translateY(0); }
+    .sheet-handle-wrap { padding: 10px 0 0; cursor: grab; touch-action: none; }
+    .sheet-handle { width: 36px; height: 4px; background: var(--clr-border); border-radius: 2px; margin: 0 auto; }
+    .sheet-top { display: flex; align-items: center; justify-content: space-between; padding: 10px 18px 10px; }
+    .sheet-title { font-size: 1rem; font-weight: 700; }
+    .sheet-count { font-size: 0.82rem; color: var(--clr-muted); font-weight: 400; }
+    .sheet-list { overflow-y: auto; max-height: calc(100dvh - var(--header-h) - var(--filter-h) - 160px); max-height: calc(100vh - var(--header-h) - var(--filter-h) - 160px); padding: 0 12px 20px; display: flex; flex-direction: column; gap: 10px; -webkit-overflow-scrolling: touch; }
+
+    /* ─── Map controls ─────────────────────────────────── */
+    .map-fab {
+      position: absolute; right: 14px; bottom: 140px; z-index: 10;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: var(--clr-surface); border: 1.5px solid var(--clr-border);
+      box-shadow: 0 2px 10px var(--clr-shadow); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; color: var(--clr-text);
+      transition: all .15s;
+    }
+    .map-fab:hover { background: var(--clr-primary); color: #fff; border-color: var(--clr-primary); }
+    .map-fab svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .leaflet-control-zoom { border: none !important; box-shadow: 0 2px 10px var(--clr-shadow) !important; }
+    .leaflet-control-zoom a { border-radius: 8px !important; border: 1.5px solid var(--clr-border) !important; color: var(--clr-text) !important; font-size: 16px !important; width: 32px !important; height: 32px !important; line-height: 30px !important; }
+    .leaflet-control-zoom a:hover { background: var(--clr-primary) !important; color: #fff !important; }
+    .leaflet-popup-content-wrapper { border-radius: var(--radius-md) !important; box-shadow: 0 4px 20px rgba(0,0,0,.15) !important; border: 1.5px solid var(--clr-border); }
+    .leaflet-popup-tip-container { display: none; }
+    .popup-inner { padding: 4px; min-width: 180px; }
+    .popup-name { font-size: 0.92rem; font-weight: 700; color: var(--clr-text); }
+    .popup-sub { font-size: 0.78rem; color: var(--clr-muted); margin-top: 2px; }
+    .popup-badge { display: inline-block; margin-top: 6px; font-size: 0.68rem; font-weight: 600; padding: 2px 7px; border-radius: 12px; }
+
+    /* ─── Responsive ───────────────────────────────────── */
+    @media (max-width: 767px) {
+      .sidebar { display: none; }
+      .bottom-sheet { display: block; }
+      .map-fab { bottom: 136px; }
+    }
+    @media (min-width: 768px) {
+      .bottom-sheet { display: none !important; }
+    }
+
+    /* ─── Legend ───────────────────────────────────────── */
+    .legend {
+      position: absolute; bottom: 14px; left: 14px; z-index: 10;
+      background: var(--clr-surface); border: 1.5px solid var(--clr-border);
+      border-radius: var(--radius-sm); padding: 10px 12px;
+      box-shadow: 0 2px 8px var(--clr-shadow); font-size: 0.74rem;
+      max-width: 140px;
+    }
+    .legend-title { font-weight: 600; color: var(--clr-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    @media (max-width: 767px) { .legend { display: none; } }
+
+    /* ─── Overlay for touch ────────────────────────────── */
+    .overlay { display: none; position: fixed; inset: 0; z-index: 15; background: rgba(0,0,0,.3); }
+    .overlay.show { display: block; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <a class="logo" href="#">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5z"/></svg>
+      </div>
+      <span class="logo-text">Local<span>Area</span></span>
+    </a>
+
+    <div class="search-wrap" id="searchWrap">
+      <span class="search-icon">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </span>
+      <input class="search-input" type="search" id="searchInput" placeholder="Search places…" autocomplete="off" />
+      <button class="search-clear" id="searchClear" aria-label="Clear search">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="header-actions">
+      <button class="icon-btn" id="locateBtn" title="My location" aria-label="My location">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" stroke-dasharray="3 2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Filter Bar ── -->
+  <nav class="filter-bar" id="filterBar" aria-label="Category filters">
+    <button class="filter-chip active" data-filter="all"><span class="chip-emoji">🗺️</span> All</button>
+    <div class="filter-divider"></div>
+    <button class="filter-chip" data-filter="coffee"><span class="chip-emoji">☕</span> Coffee</button>
+    <button class="filter-chip" data-filter="bakery"><span class="chip-emoji">🥐</span> Bakery</button>
+    <button class="filter-chip" data-filter="brunch"><span class="chip-emoji">🍳</span> Brunch</button>
+    <div class="filter-divider"></div>
+    <button class="filter-chip" data-filter="restaurant"><span class="chip-emoji">🍽️</span> Restaurants</button>
+    <button class="filter-chip" data-filter="italian"><span class="chip-emoji">🍝</span> Italian</button>
+    <button class="filter-chip" data-filter="japanese"><span class="chip-emoji">🍣</span> Japanese</button>
+    <button class="filter-chip" data-filter="indian"><span class="chip-emoji">🍛</span> Indian</button>
+    <button class="filter-chip" data-filter="chinese"><span class="chip-emoji">🥢</span> Chinese</button>
+    <button class="filter-chip" data-filter="thai"><span class="chip-emoji">🍜</span> Thai</button>
+    <div class="filter-divider"></div>
+    <button class="filter-chip" data-filter="bar"><span class="chip-emoji">🍺</span> Bars</button>
+    <button class="filter-chip" data-filter="deli"><span class="chip-emoji">🥙</span> Deli</button>
+    <div class="filter-divider"></div>
+    <button class="filter-chip" data-filter="clothes"><span class="chip-emoji">👗</span> Clothes</button>
+  </nav>
+
+  <!-- ── Body ── -->
+  <div class="body">
+
+    <!-- Map -->
+    <div id="map"></div>
+
+    <!-- Desktop Legend -->
+    <div class="legend">
+      <div class="legend-title">Type</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#6b4f3a"></div> Coffee</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#c1440e"></div> Restaurant</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#c9792c"></div> Bakery</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div> Clothes</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1e40af"></div> Bar</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#166534"></div> Deli</div>
+    </div>
+
+    <!-- Locate FAB (mobile) -->
+    <button class="map-fab" id="locateFab" aria-label="My location">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" stroke-dasharray="3 2"/></svg>
+    </button>
+
+    <!-- Desktop Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">Places nearby</div>
+        <div class="sidebar-count" id="sidebarCount">0 places</div>
+      </div>
+      <div class="sidebar-list" id="sidebarList"></div>
+
+      <!-- Detail panel (inside sidebar on desktop) -->
+      <div class="detail-panel" id="detailPanel">
+        <div class="detail-header">
+          <button class="back-btn" id="backBtn">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span class="detail-title" id="detailPanelTitle"></span>
+        </div>
+        <div class="detail-body" id="detailBody"></div>
+      </div>
+    </aside>
+
+    <!-- Mobile Bottom Sheet -->
+    <div class="bottom-sheet" id="bottomSheet">
+      <div class="sheet-handle-wrap" id="sheetHandle">
+        <div class="sheet-handle"></div>
+      </div>
+      <div class="sheet-top">
+        <div>
+          <span class="sheet-title">Places nearby</span>
+          <span class="sheet-count" id="sheetCount"></span>
+        </div>
+      </div>
+      <div class="sheet-list" id="sheetList"></div>
+
+      <!-- Mobile detail panel (full-screen overlay on mobile) -->
+      <div class="detail-panel" id="mobileDetailPanel" style="border-radius: inherit;">
+        <div class="detail-header">
+          <button class="back-btn" id="mobileBackBtn">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span class="detail-title" id="mobileDetailTitle"></span>
+        </div>
+        <div class="detail-body" id="mobileDetailBody"></div>
+      </div>
+    </div>
+
+  </div><!-- /body -->
+</div><!-- /app -->
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+/* ──────────────────────────────────────────────────────────────
+   PLACE DATA
+   lat/lng centred on a fictional UK market town (Marlborough area)
+   In production you'd swap this for an API or CMS.
+────────────────────────────────────────────────────────────── */
+const PLACES = [
+  {
+    id: 1, name: "The Daily Grind", category: "coffee",
+    tags: ["Specialty coffee", "Breakfast", "Pastries", "Dog friendly"],
+    address: "14 High Street", lat: 51.4195, lng: -1.7290,
+    indie: true, rating: 4.8, reviews: 312,
+    hours: "Mon–Fri 7am–5pm · Sat–Sun 8am–5pm",
+    note: "Sourcing single-origin beans from local roasters. One of only three branches, all in Wiltshire.",
+    emoji: "☕"
+  },
+  {
+    id: 2, name: "Smoke & Salt", category: "restaurant",
+    tags: ["Modern British", "Dinner", "Small plates", "Natural wine"],
+    address: "3 Kingsbury Street", lat: 51.4210, lng: -1.7275,
+    indie: true, rating: 4.9, reviews: 187,
+    hours: "Tue–Sat 6pm–10pm",
+    note: "Wholly independent, owner-run since 2019. Celebrated in the Good Food Guide.",
+    emoji: "🔥"
+  },
+  {
+    id: 3, name: "Miso Hungry", category: "japanese",
+    tags: ["Ramen", "Sushi", "Lunch", "Dinner", "Vegetarian options"],
+    address: "22 Parade", lat: 51.4185, lng: -1.7302,
+    indie: true, rating: 4.7, reviews: 241,
+    hours: "Mon–Sun 12pm–9:30pm",
+    note: "Independently owned, family-run Japanese restaurant. No other branches.",
+    emoji: "🍣"
+  },
+  {
+    id: 4, name: "Bread & Circus", category: "bakery",
+    tags: ["Sourdough", "Pastries", "Brunch", "Gluten-free options"],
+    address: "8 George Lane", lat: 51.4202, lng: -1.7310,
+    indie: true, rating: 4.9, reviews: 428,
+    hours: "Wed–Sun 7:30am–2pm",
+    note: "Artisan bakery using heritage grain wheat from a nearby farm. Two locations in the county.",
+    emoji: "🥖"
+  },
+  {
+    id: 5, name: "The Maharaja", category: "indian",
+    tags: ["Curry", "Dinner", "Takeaway", "Halal", "BYOB"],
+    address: "17 London Road", lat: 51.4178, lng: -1.7265,
+    indie: true, rating: 4.6, reviews: 395,
+    hours: "Mon–Sun 5pm–11pm",
+    note: "Family-owned since 1987, single location. A local institution.",
+    emoji: "🍛"
+  },
+  {
+    id: 6, name: "Threads & Co", category: "clothes",
+    tags: ["Women's fashion", "Sustainable", "Vintage-inspired", "Local designers"],
+    address: "5 St Martin's", lat: 51.4220, lng: -1.7285,
+    indie: true, rating: 4.7, reviews: 156,
+    hours: "Mon–Sat 10am–5:30pm",
+    note: "Curated boutique featuring independent UK designers. Single store, family owned.",
+    emoji: "👗"
+  },
+  {
+    id: 7, name: "Casa Napoli", category: "italian",
+    tags: ["Pizza", "Pasta", "Dinner", "Lunch", "Family friendly"],
+    address: "11 Kingsbury Street", lat: 51.4208, lng: -1.7320,
+    indie: true, rating: 4.7, reviews: 503,
+    hours: "Tue–Sun 12pm–10pm",
+    note: "Neapolitan-style pizza from a wood-fired oven. Second generation family-run. One site only.",
+    emoji: "🍕"
+  },
+  {
+    id: 8, name: "The Wiltshire Arms", category: "bar",
+    tags: ["Real ale", "Pub food", "Live music", "Garden", "Quiz nights"],
+    address: "2 Hyde Lane", lat: 51.4195, lng: -1.7255,
+    indie: true, rating: 4.5, reviews: 612,
+    hours: "Mon–Thu 12pm–11pm · Fri–Sat 12pm–12am · Sun 12pm–10:30pm",
+    note: "17th-century freehouse, independently owned. No chain affiliation whatsoever.",
+    emoji: "🍺"
+  },
+  {
+    id: 9, name: "Spice Garden", category: "thai",
+    tags: ["Thai", "Dinner", "Takeaway", "Vegetarian", "Vegan options"],
+    address: "30 High Street", lat: 51.4215, lng: -1.7295,
+    indie: true, rating: 4.6, reviews: 278,
+    hours: "Tue–Sun 5:30pm–10pm",
+    note: "Owned by a Thai family who relocated from Bangkok in 2010. One restaurant only.",
+    emoji: "🍜"
+  },
+  {
+    id: 10, name: "The Good Deli", category: "deli",
+    tags: ["Sandwiches", "Charcuterie", "Cheese", "Lunch", "Takeaway"],
+    address: "7 Parade", lat: 51.4190, lng: -1.7308,
+    indie: true, rating: 4.8, reviews: 347,
+    hours: "Mon–Sat 8am–4pm",
+    note: "Award-winning deli sourcing from local farms and artisan producers. Single site.",
+    emoji: "🥙"
+  },
+  {
+    id: 11, name: "Morning Glory", category: "brunch",
+    tags: ["Brunch", "Eggs", "Smashed avo", "Coffee", "Vegan options"],
+    address: "19 High Street", lat: 51.4200, lng: -1.7278,
+    indie: true, rating: 4.7, reviews: 189,
+    hours: "Sat–Sun 8:30am–3pm · Mon–Fri 9am–2pm",
+    note: "Popular brunch spot, independently owned and operated. One location.",
+    emoji: "🍳"
+  },
+  {
+    id: 12, name: "Golden Dragon", category: "chinese",
+    tags: ["Cantonese", "Dim sum", "Dinner", "Takeaway", "Family friendly"],
+    address: "45 London Road", lat: 51.4172, lng: -1.7282,
+    indie: true, rating: 4.5, reviews: 423,
+    hours: "Mon–Sun 12pm–10:30pm",
+    note: "Family-run for over 25 years. Authentic dim sum at weekends. Single independent location.",
+    emoji: "🥢"
+  },
+  {
+    id: 13, name: "Roam Coffee Co.", category: "coffee",
+    tags: ["Specialty coffee", "Retail beans", "Seating", "Laptops welcome"],
+    address: "6 George Lane", lat: 51.4198, lng: -1.7316,
+    indie: false, rating: 4.6, reviews: 521,
+    hours: "Mon–Fri 7am–6pm · Sat–Sun 8am–5pm",
+    note: "Small regional chain with 5 cafés across Wiltshire and Berkshire. Locally roasted beans.",
+    emoji: "☕"
+  },
+  {
+    id: 14, name: "Hartley's Menswear", category: "clothes",
+    tags: ["Men's fashion", "Smart casual", "Tailoring", "Local brand"],
+    address: "12 St Martin's", lat: 51.4222, lng: -1.7270,
+    indie: true, rating: 4.6, reviews: 92,
+    hours: "Mon–Sat 9:30am–5:30pm",
+    note: "Traditional menswear shop established 1962. Independently owned, single store.",
+    emoji: "👔"
+  },
+  {
+    id: 15, name: "Polpo", category: "italian",
+    tags: ["Venetian", "Cicchetti", "Dinner", "Lunch", "Natural wine"],
+    address: "1 Kingsbury Street", lat: 51.4206, lng: -1.7298,
+    indie: false, rating: 4.4, reviews: 344,
+    hours: "Mon–Sun 12pm–10pm",
+    note: "Small UK chain (under 10 restaurants). Started in London, known for quality Venetian food.",
+    emoji: "🍝"
+  },
+];
+
+/* ──────────────────────────────────────────────────────────────
+   CATEGORY → marker colour map
+────────────────────────────────────────────────────────────── */
+const CAT_COLOR = {
+  coffee: "#6b4f3a", restaurant: "#c1440e", italian: "#009246",
+  japanese: "#bc002d", indian: "#f5a623", chinese: "#de2910",
+  clothes: "#7c3aed", bakery: "#c9792c", bar: "#1e40af",
+  deli: "#166534", brunch: "#d97706", thai: "#0f766e",
+  default: "#2d6a4f"
+};
+
+/* ──────────────────────────────────────────────────────────────
+   APP STATE
+────────────────────────────────────────────────────────────── */
+let activeFilter = "all";
+let searchQuery  = "";
+let selectedId   = null;
+let mapMarkers   = {};   // id → { marker, el }
+let map, isMobile;
+
+/* ──────────────────────────────────────────────────────────────
+   INIT
+────────────────────────────────────────────────────────────── */
+function init() {
+  isMobile = window.innerWidth < 768;
+  window.addEventListener("resize", () => { isMobile = window.innerWidth < 768; });
+
+  initMap();
+  initFilters();
+  initSearch();
+  initSheet();
+  initLocate();
+
+  renderAll();
+}
+
+/* ──────────────────────────────────────────────────────────────
+   MAP
+────────────────────────────────────────────────────────────── */
+function initMap() {
+  map = L.map("map", {
+    center: [51.4198, -1.7293],
+    zoom: 16,
+    zoomControl: true,
+    attributionControl: true,
+  });
+
+  // Move zoom controls to top-right
+  map.zoomControl.setPosition("topright");
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(map);
+
+  map.on("click", () => { deselectAll(); });
+}
+
+function createMarkerEl(place) {
+  const el = document.createElement("div");
+  const cat = CAT_COLOR[place.category] ? place.category : "default";
+  el.className = `map-marker ${cat}`;
+  el.style.background = CAT_COLOR[cat] || CAT_COLOR.default;
+  el.innerHTML = `<span class="marker-inner">${place.emoji}</span>`;
+  return el;
+}
+
+function addMarker(place) {
+  const el = createMarkerEl(place);
+  const icon = L.divIcon({
+    html: el.outerHTML,
+    className: "",
+    iconSize: [36, 36],
+    iconAnchor: [18, 36],
+    popupAnchor: [0, -38],
+  });
+
+  const marker = L.marker([place.lat, place.lng], { icon })
+    .addTo(map)
+    .bindPopup(popupHtml(place), { maxWidth: 220, closeButton: false });
+
+  marker.on("click", (e) => {
+    L.DomEvent.stopPropagation(e);
+    selectPlace(place.id);
+  });
+
+  mapMarkers[place.id] = marker;
+}
+
+function popupHtml(place) {
+  const badge = place.indie
+    ? `<span class="popup-badge badge-indie">Independent</span>`
+    : `<span class="popup-badge badge-small-chain">Small chain</span>`;
+  return `<div class="popup-inner">
+    <div class="popup-name">${place.emoji} ${place.name}</div>
+    <div class="popup-sub">${tagLabel(place.category)}</div>
+    ${badge}
+  </div>`;
+}
+
+function tagLabel(cat) {
+  const map = { coffee:"Coffee shop", restaurant:"Restaurant", italian:"Italian restaurant",
+    japanese:"Japanese restaurant", indian:"Indian restaurant", chinese:"Chinese restaurant",
+    clothes:"Clothes shop", bakery:"Bakery & café", bar:"Bar & pub", deli:"Deli",
+    brunch:"Brunch café", thai:"Thai restaurant" };
+  return map[cat] || cat;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   FILTERS
+────────────────────────────────────────────────────────────── */
+function initFilters() {
+  document.querySelectorAll(".filter-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeFilter = btn.dataset.filter;
+      document.querySelectorAll(".filter-chip").forEach(b => b.classList.toggle("active", b === btn));
+      renderAll();
+    });
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────
+   SEARCH
+────────────────────────────────────────────────────────────── */
+function initSearch() {
+  const input = document.getElementById("searchInput");
+  const wrap  = document.getElementById("searchWrap");
+  const clear = document.getElementById("searchClear");
+
+  input.addEventListener("input", () => {
+    searchQuery = input.value.trim().toLowerCase();
+    wrap.classList.toggle("has-value", searchQuery.length > 0);
+    renderAll();
+  });
+
+  clear.addEventListener("click", () => {
+    input.value = ""; searchQuery = "";
+    wrap.classList.remove("has-value");
+    input.focus();
+    renderAll();
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────
+   FILTER LOGIC
+────────────────────────────────────────────────────────────── */
+function filterPlaces() {
+  return PLACES.filter(p => {
+    const matchFilter = activeFilter === "all" || p.category === activeFilter;
+    const matchSearch = !searchQuery ||
+      p.name.toLowerCase().includes(searchQuery) ||
+      p.tags.some(t => t.toLowerCase().includes(searchQuery)) ||
+      p.address.toLowerCase().includes(searchQuery) ||
+      tagLabel(p.category).toLowerCase().includes(searchQuery);
+    return matchFilter && matchSearch;
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────
+   RENDER
+────────────────────────────────────────────────────────────── */
+function renderAll() {
+  const visible = filterPlaces();
+  const visIds  = new Set(visible.map(p => p.id));
+
+  // Show/hide markers
+  PLACES.forEach(p => {
+    const m = mapMarkers[p.id];
+    if (!m) { addMarker(p); }
+    const marker = mapMarkers[p.id];
+    if (visIds.has(p.id)) {
+      if (!map.hasLayer(marker)) marker.addTo(map);
+    } else {
+      if (map.hasLayer(marker)) map.removeLayer(marker);
+    }
+  });
+
+  // Sidebar
+  renderList(visible, "sidebarList", "sidebarCount");
+  // Bottom sheet
+  renderList(visible, "sheetList", "sheetCount", true);
+}
+
+function renderList(places, listId, countId, compact) {
+  const listEl  = document.getElementById(listId);
+  const countEl = document.getElementById(countId);
+  if (countEl) countEl.textContent = `· ${places.length} place${places.length !== 1 ? "s" : ""}`;
+
+  if (places.length === 0) {
+    listEl.innerHTML = `<div class="no-results">
+      <span class="emoji">🔍</span>
+      <p>No places match your search.<br>Try a different filter or keyword.</p>
+    </div>`;
+    return;
+  }
+
+  listEl.innerHTML = places.map(p => cardHtml(p)).join("");
+
+  listEl.querySelectorAll(".place-card").forEach(card => {
+    card.addEventListener("click", () => selectPlace(Number(card.dataset.id)));
+  });
+}
+
+function cardHtml(p) {
+  const badge = p.indie
+    ? `<span class="card-badge badge-indie">Independent</span>`
+    : `<span class="card-badge badge-small-chain">Small chain</span>`;
+  const stars = "★".repeat(Math.round(p.rating)) + "☆".repeat(5 - Math.round(p.rating));
+  const cat = CAT_COLOR[p.category] ? p.category : "default";
+  const active = selectedId === p.id ? " active" : "";
+  return `<div class="place-card${active}" data-id="${p.id}">
+    <div class="card-top">
+      <div class="card-icon ${cat}">${p.emoji}</div>
+      <div class="card-info">
+        <div class="card-name">${p.name}</div>
+        <div class="card-meta">
+          <span class="card-type">${tagLabel(p.category)}</span>
+          ${badge}
+        </div>
+      </div>
+    </div>
+    <div class="card-tags">${p.tags.slice(0,3).map(t=>`<span class="card-tag">${t}</span>`).join("")}</div>
+    <div class="card-bottom">
+      <div class="card-rating"><span class="stars">${stars}</span> ${p.rating} <span style="color:var(--clr-muted);font-weight:400">(${p.reviews})</span></div>
+      <div class="card-addr">${p.address}</div>
+    </div>
+  </div>`;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   SELECTION
+────────────────────────────────────────────────────────────── */
+function selectPlace(id) {
+  selectedId = id;
+  const place = PLACES.find(p => p.id === id);
+  if (!place) return;
+
+  // Fly map to place
+  map.flyTo([place.lat, place.lng], 17, { animate: true, duration: 0.6 });
+  const marker = mapMarkers[id];
+  if (marker) {
+    marker.openPopup();
+    // Highlight marker visually by updating icon class
+    document.querySelectorAll(".map-marker").forEach(el => el.classList.remove("highlighted"));
+    // Can't easily access the icon element via Leaflet, but the popup is enough
+  }
+
+  // Render detail
+  const html = detailHtml(place);
+  if (isMobile) {
+    document.getElementById("mobileDetailBody").innerHTML = html;
+    document.getElementById("mobileDetailTitle").textContent = place.name;
+    document.getElementById("mobileDetailPanel").classList.add("open");
+    expandSheet();
+  } else {
+    document.getElementById("detailBody").innerHTML = html;
+    document.getElementById("detailPanelTitle").textContent = place.name;
+    document.getElementById("detailPanel").classList.add("open");
+  }
+
+  // Highlight card
+  document.querySelectorAll(".place-card").forEach(c => {
+    c.classList.toggle("active", Number(c.dataset.id) === id);
+  });
+}
+
+function deselectAll() {
+  selectedId = null;
+  document.getElementById("detailPanel").classList.remove("open");
+  document.getElementById("mobileDetailPanel").classList.remove("open");
+  document.querySelectorAll(".place-card").forEach(c => c.classList.remove("active"));
+}
+
+function detailHtml(p) {
+  const badge = p.indie
+    ? `<span class="card-badge badge-indie" style="font-size:.8rem;padding:4px 10px">✓ Independent</span>`
+    : `<span class="card-badge badge-small-chain" style="font-size:.8rem;padding:4px 10px">Small chain</span>`;
+  const stars = "★".repeat(Math.round(p.rating)) + "☆".repeat(5 - Math.round(p.rating));
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + " " + p.address)}`;
+  return `
+    <div class="detail-hero">${p.emoji}</div>
+    <div class="detail-name">${p.name}</div>
+    <div class="detail-sub">${tagLabel(p.category)} · ${p.address}</div>
+    <div class="detail-badges">${badge}
+      <span style="font-size:.8rem;font-weight:600;color:#f59e0b">${stars}</span>
+      <span style="font-size:.8rem;color:var(--clr-muted)">${p.rating} (${p.reviews} reviews)</span>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Info</div>
+      <div class="detail-info-row">
+        <div class="detail-info-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="detail-info-text">${p.hours}</div>
+      </div>
+      <div class="detail-info-row">
+        <div class="detail-info-icon">
+          <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        </div>
+        <div class="detail-info-text">${p.address}</div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Tags</div>
+      <div class="detail-tags">${p.tags.map(t=>`<span class="detail-tag">${t}</span>`).join("")}</div>
+    </div>
+
+    <div class="detail-note">${p.note}</div>
+
+    <a class="directions-btn" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      Get directions
+    </a>
+  `;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   BOTTOM SHEET (mobile)
+────────────────────────────────────────────────────────────── */
+function initSheet() {
+  const sheet  = document.getElementById("bottomSheet");
+  const handle = document.getElementById("sheetHandle");
+  let startY, startTranslate, dragging = false;
+
+  function getTranslate() {
+    const style = window.getComputedStyle(sheet);
+    const matrix = new WebKitCSSMatrix(style.transform);
+    return matrix.m42;
+  }
+
+  handle.addEventListener("touchstart", (e) => {
+    startY = e.touches[0].clientY;
+    startTranslate = getTranslate();
+    dragging = true;
+    sheet.style.transition = "none";
+  }, { passive: true });
+
+  handle.addEventListener("touchmove", (e) => {
+    if (!dragging) return;
+    const dy = e.touches[0].clientY - startY;
+    const newT = Math.max(0, startTranslate + dy);
+    sheet.style.transform = `translateY(${newT}px)`;
+  }, { passive: true });
+
+  handle.addEventListener("touchend", (e) => {
+    dragging = false;
+    sheet.style.transition = "";
+    const cur = getTranslate();
+    const halfHeight = sheet.offsetHeight / 2;
+    if (cur < halfHeight) {
+      expandSheet();
+    } else {
+      collapseSheet();
+    }
+  });
+
+  handle.addEventListener("click", () => {
+    sheet.classList.contains("expanded") ? collapseSheet() : expandSheet();
+  });
+
+  document.getElementById("backBtn").addEventListener("click", () => {
+    document.getElementById("detailPanel").classList.remove("open");
+    selectedId = null;
+    document.querySelectorAll(".place-card").forEach(c => c.classList.remove("active"));
+  });
+  document.getElementById("mobileBackBtn").addEventListener("click", () => {
+    document.getElementById("mobileDetailPanel").classList.remove("open");
+    selectedId = null;
+    document.querySelectorAll(".place-card").forEach(c => c.classList.remove("active"));
+  });
+}
+
+function expandSheet() {
+  document.getElementById("bottomSheet").classList.add("expanded");
+}
+function collapseSheet() {
+  document.getElementById("bottomSheet").classList.remove("expanded");
+}
+
+/* ──────────────────────────────────────────────────────────────
+   LOCATE
+────────────────────────────────────────────────────────────── */
+function initLocate() {
+  [document.getElementById("locateBtn"), document.getElementById("locateFab")].forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(pos => {
+        map.flyTo([pos.coords.latitude, pos.coords.longitude], 16);
+      }, () => {
+        // Fallback: fly to default area
+        map.flyTo([51.4198, -1.7293], 16);
+      });
+    });
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────
+   BOOT
+────────────────────────────────────────────────────────────── */
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
