@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>LocalArea — Independent Shops &amp; Restaurants</title>
+  <title>LocalArea Essex — Independent Shops &amp; Restaurants</title>
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -55,6 +55,21 @@
     .logo-icon svg { width: 18px; height: 18px; fill: #fff; }
     .logo-text { font-size: 1.05rem; font-weight: 700; color: var(--clr-primary); letter-spacing: -0.3px; }
     .logo-text span { color: var(--clr-accent); }
+
+    /* ─── Town Selector ───────────────────────────────── */
+    .town-select {
+      height: 36px; border: 1.5px solid var(--clr-border); border-radius: 20px;
+      padding: 0 28px 0 12px; font-size: 0.82rem; font-family: inherit; font-weight: 500;
+      background: var(--clr-bg); color: var(--clr-text); cursor: pointer;
+      appearance: none; -webkit-appearance: none; outline: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 9px center;
+      flex-shrink: 0; transition: border-color .2s, box-shadow .2s;
+      max-width: 160px;
+    }
+    .town-select:focus { border-color: var(--clr-primary-light); box-shadow: 0 0 0 3px rgba(82,183,136,.18); }
+    .town-select:hover { border-color: var(--clr-primary-light); }
+    @media (max-width: 480px) { .town-select { max-width: 120px; font-size: 0.78rem; } }
 
     .search-wrap { flex: 1; position: relative; max-width: 480px; }
     .search-input {
@@ -321,6 +336,15 @@
     /* ─── Overlay for touch ────────────────────────────── */
     .overlay { display: none; position: fixed; inset: 0; z-index: 15; background: rgba(0,0,0,.3); }
     .overlay.show { display: block; }
+    /* ─── Google rating ─────────────────────────────── */
+    .google-rating-section { margin-top: 10px; }
+    .google-rating-loading { font-size: 0.82rem; color: var(--clr-muted); padding: 6px 0; display: flex; align-items: center; gap: 6px; }
+    .google-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #e8f0fe; border-radius: 12px; padding: 3px 10px;
+      font-size: 0.78rem; font-weight: 600; color: #1a73e8;
+    }
+    .google-badge .g-stars { color: #f59e0b; }
   </style>
 </head>
 <body>
@@ -339,11 +363,28 @@
       <span class="search-icon">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </span>
-      <input class="search-input" type="search" id="searchInput" placeholder="Search places, or type town & press Enter…" autocomplete="off" />
+      <input class="search-input" type="search" id="searchInput" placeholder="Search places in Essex…" autocomplete="off" />
       <button class="search-clear" id="searchClear" aria-label="Clear search">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
+
+    <select class="town-select" id="townSelect" aria-label="Select Essex town">
+      <option value="-1">📍 All Essex</option>
+      <option value="0" selected>Chelmsford</option>
+      <option value="1">Colchester</option>
+      <option value="2">Southend-on-Sea</option>
+      <option value="3">Brentwood</option>
+      <option value="4">Basildon</option>
+      <option value="5">Harlow</option>
+      <option value="6">Braintree</option>
+      <option value="7">Saffron Walden</option>
+      <option value="8">Maldon</option>
+      <option value="9">Witham</option>
+      <option value="10">Clacton-on-Sea</option>
+      <option value="11">Epping</option>
+      <option value="12">Billericay</option>
+    </select>
 
     <div class="header-actions">
       <button class="icon-btn" id="locateBtn" title="My location" aria-label="My location">
@@ -448,24 +489,58 @@
 
 <script>
 /* ──────────────────────────────────────────────────────────────
+   CONFIG — set your Google Places API key to enable live ratings
+   Leave empty ("") to use the built-in pseudo-random ratings.
+────────────────────────────────────────────────────────────── */
+const GOOGLE_API_KEY = ""; // e.g. "AIzaSy..."
+
+/* ──────────────────────────────────────────────────────────────
+   ESSEX TOWNS
+────────────────────────────────────────────────────────────── */
+const ESSEX_TOWNS = [
+  { name: "Chelmsford",      lat: 51.7361, lng:  0.4798, zoom: 14, radius: 2000 },
+  { name: "Colchester",      lat: 51.8959, lng:  0.8919, zoom: 14, radius: 2000 },
+  { name: "Southend-on-Sea", lat: 51.5459, lng:  0.7077, zoom: 14, radius: 2000 },
+  { name: "Brentwood",       lat: 51.6218, lng:  0.3041, zoom: 14, radius: 2000 },
+  { name: "Basildon",        lat: 51.5770, lng:  0.4900, zoom: 14, radius: 2000 },
+  { name: "Harlow",          lat: 51.7694, lng:  0.0877, zoom: 14, radius: 2000 },
+  { name: "Braintree",       lat: 51.8784, lng:  0.5513, zoom: 14, radius: 2000 },
+  { name: "Saffron Walden",  lat: 52.0224, lng:  0.2426, zoom: 14, radius: 2000 },
+  { name: "Maldon",          lat: 51.7312, lng:  0.6756, zoom: 14, radius: 2000 },
+  { name: "Witham",          lat: 51.7972, lng:  0.6394, zoom: 14, radius: 2000 },
+  { name: "Clacton-on-Sea",  lat: 51.7923, lng:  1.1554, zoom: 14, radius: 2000 },
+  { name: "Epping",          lat: 51.6996, lng:  0.1139, zoom: 14, radius: 2000 },
+  { name: "Billericay",      lat: 51.6278, lng:  0.4208, zoom: 14, radius: 2000 },
+];
+// All-Essex view: centred on Essex, zoomed out
+const ESSEX_ALL  = { lat: 51.76, lng: 0.67, zoom: 10, radius: 25000 };
+// Default town (Chelmsford)
+const DEFAULT_TOWN = ESSEX_TOWNS[0];
+// Approximate bounding box for Essex
+const ESSEX_BOUNDS = { south: 51.40, west: -0.10, north: 52.09, east: 1.27 };
+
+// Google ratings cache: placeId → { rating, reviewCount } | null
+const googleRatingsCache = {};
+
+/* ──────────────────────────────────────────────────────────────
    PLACE DATA
-   lat/lng centred on a fictional UK market town (Marlborough area)
-   In production you'd swap this for an API or CMS.
+   Sample places centred on Chelmsford, Essex.
+   Replaced with live OpenStreetMap data on first map load.
 ────────────────────────────────────────────────────────────── */
 let PLACES = [
   {
     id: 1, name: "The Daily Grind", category: "coffee",
     tags: ["Specialty coffee", "Breakfast", "Pastries", "Dog friendly"],
-    address: "14 High Street", lat: 51.4195, lng: -1.7290,
+    address: "14 High Street, Chelmsford", lat: 51.7355, lng: 0.4810,
     indie: true, rating: 4.8, reviews: 312,
     hours: "Mon–Fri 7am–5pm · Sat–Sun 8am–5pm",
-    note: "Sourcing single-origin beans from local roasters. One of only three branches, all in Wiltshire.",
+    note: "Sourcing single-origin beans from local Essex roasters. Independent single-site café.",
     emoji: "☕"
   },
   {
     id: 2, name: "Smoke & Salt", category: "restaurant",
     tags: ["Modern British", "Dinner", "Small plates", "Natural wine"],
-    address: "3 Kingsbury Street", lat: 51.4210, lng: -1.7275,
+    address: "3 Duke Street, Chelmsford", lat: 51.7368, lng: 0.4795,
     indie: true, rating: 4.9, reviews: 187,
     hours: "Tue–Sat 6pm–10pm",
     note: "Wholly independent, owner-run since 2019. Celebrated in the Good Food Guide.",
@@ -474,7 +549,7 @@ let PLACES = [
   {
     id: 3, name: "Miso Hungry", category: "japanese",
     tags: ["Ramen", "Sushi", "Lunch", "Dinner", "Vegetarian options"],
-    address: "22 Parade", lat: 51.4185, lng: -1.7302,
+    address: "22 Springfield Road, Chelmsford", lat: 51.7348, lng: 0.4830,
     indie: true, rating: 4.7, reviews: 241,
     hours: "Mon–Sun 12pm–9:30pm",
     note: "Independently owned, family-run Japanese restaurant. No other branches.",
@@ -483,25 +558,25 @@ let PLACES = [
   {
     id: 4, name: "Bread & Circus", category: "bakery",
     tags: ["Sourdough", "Pastries", "Brunch", "Gluten-free options"],
-    address: "8 George Lane", lat: 51.4202, lng: -1.7310,
+    address: "8 Moulsham Street, Chelmsford", lat: 51.7341, lng: 0.4800,
     indie: true, rating: 4.9, reviews: 428,
     hours: "Wed–Sun 7:30am–2pm",
-    note: "Artisan bakery using heritage grain wheat from a nearby farm. Two locations in the county.",
+    note: "Artisan bakery using heritage grain wheat from an Essex farm. Two locations in the county.",
     emoji: "🥖"
   },
   {
     id: 5, name: "The Maharaja", category: "indian",
     tags: ["Curry", "Dinner", "Takeaway", "Halal", "BYOB"],
-    address: "17 London Road", lat: 51.4178, lng: -1.7265,
+    address: "17 London Road, Chelmsford", lat: 51.7362, lng: 0.4775,
     indie: true, rating: 4.6, reviews: 395,
     hours: "Mon–Sun 5pm–11pm",
-    note: "Family-owned since 1987, single location. A local institution.",
+    note: "Family-owned since 1987, single location. A Chelmsford institution.",
     emoji: "🍛"
   },
   {
     id: 6, name: "Threads & Co", category: "clothes",
     tags: ["Women's fashion", "Sustainable", "Vintage-inspired", "Local designers"],
-    address: "5 St Martin's", lat: 51.4220, lng: -1.7285,
+    address: "5 Threadneedle Street, Chelmsford", lat: 51.7375, lng: 0.4808,
     indie: true, rating: 4.7, reviews: 156,
     hours: "Mon–Sat 10am–5:30pm",
     note: "Curated boutique featuring independent UK designers. Single store, family owned.",
@@ -510,43 +585,43 @@ let PLACES = [
   {
     id: 7, name: "Casa Napoli", category: "italian",
     tags: ["Pizza", "Pasta", "Dinner", "Lunch", "Family friendly"],
-    address: "11 Kingsbury Street", lat: 51.4208, lng: -1.7320,
+    address: "11 Baddow Road, Chelmsford", lat: 51.7350, lng: 0.4822,
     indie: true, rating: 4.7, reviews: 503,
     hours: "Tue–Sun 12pm–10pm",
     note: "Neapolitan-style pizza from a wood-fired oven. Second generation family-run. One site only.",
     emoji: "🍕"
   },
   {
-    id: 8, name: "The Wiltshire Arms", category: "bar",
+    id: 8, name: "The Essex Arms", category: "bar",
     tags: ["Real ale", "Pub food", "Live music", "Garden", "Quiz nights"],
-    address: "2 Hyde Lane", lat: 51.4195, lng: -1.7255,
+    address: "2 New London Road, Chelmsford", lat: 51.7360, lng: 0.4758,
     indie: true, rating: 4.5, reviews: 612,
     hours: "Mon–Thu 12pm–11pm · Fri–Sat 12pm–12am · Sun 12pm–10:30pm",
-    note: "17th-century freehouse, independently owned. No chain affiliation whatsoever.",
+    note: "Traditional freehouse, independently owned. No chain affiliation whatsoever.",
     emoji: "🍺"
   },
   {
     id: 9, name: "Spice Garden", category: "thai",
     tags: ["Thai", "Dinner", "Takeaway", "Vegetarian", "Vegan options"],
-    address: "30 High Street", lat: 51.4215, lng: -1.7295,
+    address: "30 Broomfield Road, Chelmsford", lat: 51.7380, lng: 0.4812,
     indie: true, rating: 4.6, reviews: 278,
     hours: "Tue–Sun 5:30pm–10pm",
-    note: "Owned by a Thai family who relocated from Bangkok in 2010. One restaurant only.",
+    note: "Owned by a Thai family who relocated to Essex in 2010. One restaurant only.",
     emoji: "🍜"
   },
   {
     id: 10, name: "The Good Deli", category: "deli",
     tags: ["Sandwiches", "Charcuterie", "Cheese", "Lunch", "Takeaway"],
-    address: "7 Parade", lat: 51.4190, lng: -1.7308,
+    address: "7 Market Road, Chelmsford", lat: 51.7345, lng: 0.4803,
     indie: true, rating: 4.8, reviews: 347,
     hours: "Mon–Sat 8am–4pm",
-    note: "Award-winning deli sourcing from local farms and artisan producers. Single site.",
+    note: "Award-winning deli sourcing from Essex farms and artisan producers. Single site.",
     emoji: "🥙"
   },
   {
     id: 11, name: "Morning Glory", category: "brunch",
     tags: ["Brunch", "Eggs", "Smashed avo", "Coffee", "Vegan options"],
-    address: "19 High Street", lat: 51.4200, lng: -1.7278,
+    address: "19 High Street, Chelmsford", lat: 51.7358, lng: 0.4815,
     indie: true, rating: 4.7, reviews: 189,
     hours: "Sat–Sun 8:30am–3pm · Mon–Fri 9am–2pm",
     note: "Popular brunch spot, independently owned and operated. One location.",
@@ -555,7 +630,7 @@ let PLACES = [
   {
     id: 12, name: "Golden Dragon", category: "chinese",
     tags: ["Cantonese", "Dim sum", "Dinner", "Takeaway", "Family friendly"],
-    address: "45 London Road", lat: 51.4172, lng: -1.7282,
+    address: "45 Victoria Road, Chelmsford", lat: 51.7335, lng: 0.4790,
     indie: true, rating: 4.5, reviews: 423,
     hours: "Mon–Sun 12pm–10:30pm",
     note: "Family-run for over 25 years. Authentic dim sum at weekends. Single independent location.",
@@ -564,16 +639,16 @@ let PLACES = [
   {
     id: 13, name: "Roam Coffee Co.", category: "coffee",
     tags: ["Specialty coffee", "Retail beans", "Seating", "Laptops welcome"],
-    address: "6 George Lane", lat: 51.4198, lng: -1.7316,
+    address: "6 Chelmsford High Street", lat: 51.7352, lng: 0.4820,
     indie: false, rating: 4.6, reviews: 521,
     hours: "Mon–Fri 7am–6pm · Sat–Sun 8am–5pm",
-    note: "Small regional chain with 5 cafés across Wiltshire and Berkshire. Locally roasted beans.",
+    note: "Small regional chain with cafés across Essex and Hertfordshire. Locally roasted beans.",
     emoji: "☕"
   },
   {
     id: 14, name: "Hartley's Menswear", category: "clothes",
     tags: ["Men's fashion", "Smart casual", "Tailoring", "Local brand"],
-    address: "12 St Martin's", lat: 51.4222, lng: -1.7270,
+    address: "12 Duke Street, Chelmsford", lat: 51.7372, lng: 0.4792,
     indie: true, rating: 4.6, reviews: 92,
     hours: "Mon–Sat 9:30am–5:30pm",
     note: "Traditional menswear shop established 1962. Independently owned, single store.",
@@ -582,7 +657,7 @@ let PLACES = [
   {
     id: 15, name: "Polpo", category: "italian",
     tags: ["Venetian", "Cicchetti", "Dinner", "Lunch", "Natural wine"],
-    address: "1 Kingsbury Street", lat: 51.4206, lng: -1.7298,
+    address: "1 High Street, Chelmsford", lat: 51.7356, lng: 0.4807,
     indie: false, rating: 4.4, reviews: 344,
     hours: "Mon–Sun 12pm–10pm",
     note: "Small UK chain (under 10 restaurants). Started in London, known for quality Venetian food.",
@@ -604,28 +679,13 @@ const CAT_COLOR = {
 /* ──────────────────────────────────────────────────────────────
    APP STATE
 ────────────────────────────────────────────────────────────── */
-let activeFilter = "all";
-let searchQuery  = "";
-let selectedId   = null;
-let mapMarkers   = {};   // id → { marker, el }
+let activeFilter  = "all";
+let searchQuery   = "";
+let selectedId    = null;
+let mapMarkers    = {};   // id → marker
 let map, isMobile;
-let isLoading    = false;
-
-/* ──────────────────────────────────────────────────────────────
-   INIT
-────────────────────────────────────────────────────────────── */
-function init() {
-  isMobile = window.innerWidth < 768;
-  window.addEventListener("resize", () => { isMobile = window.innerWidth < 768; });
-
-  initMap();
-  initFilters();
-  initSearch();
-  initSheet();
-  initLocate();
-
-  renderAll();
-}
+let isLoading     = false;
+let currentRadius = DEFAULT_TOWN.radius; // updated when switching towns
 
 /* ──────────────────────────────────────────────────────────────
    DEBOUNCE HELPER
@@ -826,19 +886,36 @@ function mapOSMElementToPlace(el) {
 
 /* ──────────────────────────────────────────────────────────────
    OVERPASS API FETCHING
+   Supports both small-radius (around:) and large-area bounding-box
+   queries (used for "All Essex" view with radius > 10,000 m).
 ────────────────────────────────────────────────────────────── */
 async function fetchPlacesFromOverpass(lat, lng, radius = 2000) {
   isLoading = true;
   renderAll();
 
-  const query = `[out:json];
+  let areaFilter;
+  let outputLimit;
+  if (radius > 10000) {
+    // Bounding-box query for large areas (All Essex)
+    const latDelta = radius / 111320;
+    const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
+    const s = (lat - latDelta).toFixed(5), n = (lat + latDelta).toFixed(5);
+    const w = (lng - lngDelta).toFixed(5), e = (lng + lngDelta).toFixed(5);
+    areaFilter = `(${s},${w},${n},${e})`;
+    outputLimit = " 300";
+  } else {
+    areaFilter = `(around:${radius},${lat},${lng})`;
+    outputLimit = "";
+  }
+
+  const query = `[out:json][timeout:30];
 (
-  node["amenity"~"restaurant|cafe|pub|bar"](around:${radius},${lat},${lng});
-  way["amenity"~"restaurant|cafe|pub|bar"](around:${radius},${lat},${lng});
-  node["shop"~"bakery|clothes|deli"](around:${radius},${lat},${lng});
-  way["shop"~"bakery|clothes|deli"](around:${radius},${lat},${lng});
+  node["amenity"~"restaurant|cafe|pub|bar"]["name"]${areaFilter};
+  way["amenity"~"restaurant|cafe|pub|bar"]["name"]${areaFilter};
+  node["shop"~"bakery|clothes|deli"]["name"]${areaFilter};
+  way["shop"~"bakery|clothes|deli"]["name"]${areaFilter};
 );
-out center;`;
+out center${outputLimit};`;
 
   const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
 
@@ -911,6 +988,7 @@ function init() {
   initSearch();
   initSheet();
   initLocate();
+  initTownSelector();
 
   renderAll();
 }
@@ -920,8 +998,8 @@ function init() {
 ────────────────────────────────────────────────────────────── */
 function initMap() {
   map = L.map("map", {
-    center: [51.4198, -1.7293],
-    zoom: 16,
+    center: [DEFAULT_TOWN.lat, DEFAULT_TOWN.lng],
+    zoom: DEFAULT_TOWN.zoom,
     zoomControl: true,
     attributionControl: true,
   });
@@ -938,7 +1016,7 @@ function initMap() {
 
   // Connect map move (drag/zoom) with debounced Overpass API fetching
   const debouncedFetch = debounce((lat, lng) => {
-    fetchPlacesFromOverpass(lat, lng);
+    fetchPlacesFromOverpass(lat, lng, currentRadius);
   }, 800);
 
   map.on("moveend", () => {
@@ -1167,9 +1245,7 @@ function selectPlace(id) {
   const marker = mapMarkers[id];
   if (marker) {
     marker.openPopup();
-    // Highlight marker visually by updating icon class
     document.querySelectorAll(".map-marker").forEach(el => el.classList.remove("highlighted"));
-    // Can't easily access the icon element via Leaflet, but the popup is enough
   }
 
   // Render detail
@@ -1189,6 +1265,9 @@ function selectPlace(id) {
   document.querySelectorAll(".place-card").forEach(c => {
     c.classList.toggle("active", Number(c.dataset.id) === id);
   });
+
+  // Fetch Google rating asynchronously (no-op if no API key)
+  fetchGoogleRating(place);
 }
 
 function deselectAll() {
@@ -1204,6 +1283,36 @@ function detailHtml(p) {
     : `<span class="card-badge badge-small-chain" style="font-size:.8rem;padding:4px 10px">Small chain</span>`;
   const stars = "★".repeat(Math.round(p.rating)) + "☆".repeat(5 - Math.round(p.rating));
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + " " + p.address)}`;
+
+  // Google rating: show cached result, a loading indicator, or nothing
+  let googleSection = "";
+  if (GOOGLE_API_KEY) {
+    const cached = googleRatingsCache[p.id];
+    if (cached) {
+      // Already fetched – render inline
+      const gs = "★".repeat(Math.round(cached.rating)) + "☆".repeat(Math.max(0, 5 - Math.round(cached.rating)));
+      googleSection = `<div class="google-rating-section" data-place-id="${p.id}">
+        <div class="detail-info-row">
+          <div class="detail-info-icon" style="background:#e8f0fe">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#4285f4" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div class="detail-info-text">
+            <span class="google-badge"><span class="g-stars">${gs}</span> ${cached.rating.toFixed(1)} on Google</span>
+            <span style="font-size:.78rem;color:var(--clr-muted);margin-left:6px">(${cached.reviewCount.toLocaleString()} reviews)</span>
+          </div>
+        </div>
+      </div>`;
+    } else {
+      // Will be populated async
+      googleSection = `<div class="google-rating-section" data-place-id="${p.id}">
+        <div class="google-rating-loading">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Fetching Google rating…
+        </div>
+      </div>`;
+    }
+  }
+
   return `
     <div class="detail-hero">${p.emoji}</div>
     <div class="detail-name">${p.name}</div>
@@ -1227,6 +1336,7 @@ function detailHtml(p) {
         </div>
         <div class="detail-info-text">${p.address}</div>
       </div>
+      ${googleSection}
     </div>
 
     <div class="detail-section">
@@ -1309,33 +1419,146 @@ function collapseSheet() {
 /* ──────────────────────────────────────────────────────────────
    LOCATE
 ────────────────────────────────────────────────────────────── */
+function isInEssex(lat, lng) {
+  return lat >= ESSEX_BOUNDS.south && lat <= ESSEX_BOUNDS.north
+      && lng >= ESSEX_BOUNDS.west  && lng <= ESSEX_BOUNDS.east;
+}
+
 function initLocate() {
   // Auto-detect location on load
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(pos => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
-      map.setView([lat, lng], 16);
+      if (isInEssex(lat, lng)) {
+        // User is in Essex – show their location
+        currentRadius = DEFAULT_TOWN.radius;
+        map.setView([lat, lng], 15);
+      } else {
+        // Outside Essex – default to Chelmsford
+        currentRadius = DEFAULT_TOWN.radius;
+        map.setView([DEFAULT_TOWN.lat, DEFAULT_TOWN.lng], DEFAULT_TOWN.zoom);
+        fetchPlacesFromOverpass(DEFAULT_TOWN.lat, DEFAULT_TOWN.lng, currentRadius);
+      }
     }, () => {
-      // Fallback: stay at default center Sn8 / Marlborough, and do initial fetch manually
-      const center = map.getCenter();
-      fetchPlacesFromOverpass(center.lat, center.lng);
+      // Geolocation denied/failed – default to Chelmsford
+      currentRadius = DEFAULT_TOWN.radius;
+      fetchPlacesFromOverpass(DEFAULT_TOWN.lat, DEFAULT_TOWN.lng, currentRadius);
     });
   } else {
-    const center = map.getCenter();
-    fetchPlacesFromOverpass(center.lat, center.lng);
+    currentRadius = DEFAULT_TOWN.radius;
+    fetchPlacesFromOverpass(DEFAULT_TOWN.lat, DEFAULT_TOWN.lng, currentRadius);
   }
 
   [document.getElementById("locateBtn"), document.getElementById("locateFab")].forEach(btn => {
     btn.addEventListener("click", () => {
       if (!navigator.geolocation) return;
       navigator.geolocation.getCurrentPosition(pos => {
-        map.flyTo([pos.coords.latitude, pos.coords.longitude], 16);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        currentRadius = DEFAULT_TOWN.radius;
+        map.flyTo([lat, lng], 15);
       }, () => {
-        // Fallback: fly to default area
-        map.flyTo([51.4198, -1.7293], 16);
+        // Fallback: fly to Chelmsford
+        currentRadius = DEFAULT_TOWN.radius;
+        map.flyTo([DEFAULT_TOWN.lat, DEFAULT_TOWN.lng], DEFAULT_TOWN.zoom);
       });
     });
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────
+   TOWN SELECTOR
+────────────────────────────────────────────────────────────── */
+function initTownSelector() {
+  const sel = document.getElementById("townSelect");
+  sel.addEventListener("change", () => {
+    const idx = parseInt(sel.value, 10);
+    if (idx === -1) {
+      // All Essex
+      currentRadius = ESSEX_ALL.radius;
+      map.flyTo([ESSEX_ALL.lat, ESSEX_ALL.lng], ESSEX_ALL.zoom, { animate: true, duration: 1.2 });
+    } else {
+      const town = ESSEX_TOWNS[idx];
+      if (town) {
+        currentRadius = town.radius;
+        map.flyTo([town.lat, town.lng], town.zoom, { animate: true, duration: 1.0 });
+      }
+    }
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────
+   GOOGLE PLACES RATINGS
+   Requires GOOGLE_API_KEY to be set above.
+   Uses the Google Places API (New) v1 — supports browser CORS.
+────────────────────────────────────────────────────────────── */
+async function fetchGoogleRating(place) {
+  if (!GOOGLE_API_KEY) return;
+
+  // Already cached (even if null = not found)
+  if (Object.prototype.hasOwnProperty.call(googleRatingsCache, place.id)) {
+    updateGoogleRatingUI(place.id, googleRatingsCache[place.id]);
+    return;
+  }
+
+  // Mark as in-flight
+  googleRatingsCache[place.id] = undefined;
+
+  try {
+    const query = `${place.name} ${place.address} Essex UK`;
+    const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": GOOGLE_API_KEY,
+        "X-Goog-FieldMask": "places.rating,places.userRatingCount"
+      },
+      body: JSON.stringify({ textQuery: query, maxResultCount: 1 })
+    });
+
+    if (!response.ok) throw new Error(`Google Places API ${response.status}`);
+    const data = await response.json();
+
+    if (data.places && data.places.length > 0) {
+      const gp = data.places[0];
+      const result = {
+        rating: gp.rating,
+        reviewCount: gp.userRatingCount || 0
+      };
+      googleRatingsCache[place.id] = result;
+      updateGoogleRatingUI(place.id, result);
+    } else {
+      googleRatingsCache[place.id] = null;
+      updateGoogleRatingUI(place.id, null);
+    }
+  } catch (err) {
+    console.warn("Google Places API failed:", err);
+    googleRatingsCache[place.id] = null;
+    updateGoogleRatingUI(place.id, null);
+  }
+}
+
+function updateGoogleRatingUI(placeId, data) {
+  document.querySelectorAll(`.google-rating-section[data-place-id="${placeId}"]`).forEach(el => {
+    if (!data) {
+      el.innerHTML = "";
+      return;
+    }
+    const fullStars  = Math.round(data.rating);
+    const stars = "★".repeat(fullStars) + "☆".repeat(Math.max(0, 5 - fullStars));
+    el.innerHTML = `<div class="detail-info-row">
+      <div class="detail-info-icon" style="background:#e8f0fe">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#4285f4" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      </div>
+      <div class="detail-info-text">
+        <span class="google-badge">
+          <span class="g-stars">${stars}</span>
+          ${data.rating.toFixed(1)} on Google
+        </span>
+        <span style="font-size:.78rem;color:var(--clr-muted);margin-left:6px">(${data.reviewCount.toLocaleString()} reviews)</span>
+      </div>
+    </div>`;
   });
 }
 
